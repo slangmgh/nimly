@@ -493,14 +493,17 @@ proc tableMakerProc(name, tokenType, tokenKind, topNonTerm,
   body.add(
     nnkAsgn.newTree(
       newIdentNode("result"),
-      nnkCall.newTree(
-        nnkBracketExpr.newTree(
-          newIdentNode("toConst"),
-          tokenKind
+      nnkPar.newTree(
+        nnkCall.newTree(
+          nnkBracketExpr.newTree(
+            newIdentNode("toConst"),
+            tokenKind
+          ),
+          tmpTable,
+          stiId,
+          rtiId
         ),
-        tmpTable,
-        stiId,
-        rtiId
+        tmpTable
       )
     )
   )
@@ -524,7 +527,15 @@ proc tableMakerProc(name, tokenType, tokenKind, topNonTerm,
 
   result = newProc(
     name,
-    @[newIdentNode("ConstTable")],
+    @[
+      nnkPar.newTree(
+        newIdentNode("ConstTable"),
+        nnkBracketExpr.newTree(
+          newIdentNode("ParsingTable"),
+          tokenKind
+        )
+      )
+    ],
     body
   )
 
@@ -932,24 +943,36 @@ macro nimy*(head, body: untyped): untyped =
     tableMakerProc(tmpName, tokenType, tokenKind, topNonTermNode, tableMaker,
                    ruleIds, ruleDefs, symNodes)
   )
-  var constTableName: NimNode
+  var
+    constTableName: NimNode
+    noConstTableName: NimNode
   when defined(nimylet):
     constTableName = genSym()
+    noConstTableName = genSym()
     result.add(
-      newLetStmt(
-        constTableName,
-        nnkCall.newTree(
-          tmpName
+      nnkLetSection.newTree(
+        nnkVarTuple.newTree(
+          constTableName,
+          noConstTableName,
+          newEmptyNode(),
+          nnkCall.newTree(
+            tmpName
+          )
         )
       )
     )
   else:
     constTableName = genSym(nskConst)
+    noConstTableName = genSym(nskConst)
     result.add(
-      newConstStmt(
-        constTableName,
-        nnkCall.newTree(
-          tmpName
+      nnkConstSection.newTree(
+        nnkVarTuple.newTree(
+          constTableName,
+          noConstTableName,
+          newEmptyNode(),
+          nnkCall.newTree(
+            tmpName
+          )
         )
       )
     )
@@ -973,6 +996,56 @@ macro nimy*(head, body: untyped): untyped =
         constTableName,
         its,
         itr
+      )
+    )
+  )
+
+  result.add(
+    nnkCommand.newTree(
+      newIdentNode("echo"),
+      newLit("toconst-reconstruct\n--------")
+    )
+  )
+
+  result.add(
+    nnkCommand.newTree(
+      newIdentNode("echo"),
+      nnkDotExpr.newTree(
+        letTable,
+        newIdentNode("normalizedParsingTable")
+      ),
+    )
+  )
+
+  result.add(
+    nnkCommand.newTree(
+      newIdentNode("echo"),
+      newLit("raw\n--------")
+    )
+  )
+
+  result.add(
+    nnkCommand.newTree(
+      newIdentNode("echo"),
+      nnkDotExpr.newTree(
+        noConstTableName,
+        newIdentNode("normalizedParsingTable")
+      ),
+    )
+  )
+
+  result.add(
+    nnkStmtList.newTree(
+      nnkCommand.newTree(
+        newIdentNode("doAssert"),
+        nnkPar.newTree(
+          nnkCall.newTree(
+            newIdentNode("equalParsingTables"),
+            letTable,
+            noConstTableName,
+          )
+        ),
+        newLit("ParsingTable not equal toConst and reconstruct of it.")
       )
     )
   )

@@ -65,6 +65,54 @@ type
   IntToSym*[T] = Table[int, Symbol[T]]
   IntToRule*[T] = Table[int, Rule[T]]
 
+proc normalizedActionTable[T](t: ActionTable[T]): ActionTable[T] =
+  result = initTable[State, ActionRow[T]]()
+  for s, r in t:
+    if r.len != 0:
+      result[s] = r
+
+proc normalizedGotoTable[T](t: GotoTable[T]): GotoTable[T] =
+  result = initTable[State, GotoRow[T]]()
+  for s, r in t:
+    if r.len != 0:
+      result[s] = r
+
+proc normalizedParsingTable*[T](t: ParsingTable[T]): ParsingTable[T] =
+  result = ParsingTable[T](
+    action: t.action.normalizedActionTable,
+    goto: t.goto.normalizedGotoTable
+  )
+
+proc equalParsingTables*[T](a, b: ParsingTable[T]): bool =
+  result = true
+  let
+    na = a.normalizedParsingTable
+    nb = b.normalizedParsingTable
+
+  if na.action.len != nb.action.len:
+    return false
+
+  if na.goto.len != nb.goto.len:
+    return false
+
+  for st, r in na.action:
+    for sm, rr in r:
+      if not nb.action.hasKey(st):
+        return false
+      if not nb.action[st].hasKey(sm):
+        return false
+      if $nb.action[st][sm] != $rr:
+        return false
+
+  for st, r in na.goto:
+    for sm, rr in r:
+      if not nb.goto.hasKey(st):
+        return false
+      if not nb.goto[st].hasKey(sm):
+        return false
+      if nb.goto[st][sm] != rr:
+        return false
+
 proc `$`*[T](at: ActionTable[T]): string =
   result = "\nActionTable:\n--------\n"
   for s, row in at:
